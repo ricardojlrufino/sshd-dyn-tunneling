@@ -23,9 +23,6 @@ import io.netty.handler.logging.LoggingHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.Properties;
 
 
@@ -47,7 +44,6 @@ public class HexDumpProxy {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HexDumpProxy.class);
 
 	public static void main(String[] args) throws InterruptedException {
-//		init();
 
 		LOGGER.info("Proxying *:" + LOCAL_PORT + " to " + REMOTE_HOST + ':' + REMOTE_PORT + " ...");
 
@@ -60,11 +56,7 @@ public class HexDumpProxy {
 			 .channel(NioServerSocketChannel.class)
 			 .option(ChannelOption.SO_KEEPALIVE, true)
 			 .handler(new LoggingHandler(LogLevel.INFO))
-			 .childHandler(new HexDumpProxyInitializer("homologacao2.edu3.com.br", 80, false,
-			                                           KEY_STORE_LOCATION, KEY_STORE_PASSWORD,
-			                                           false, TRUST_STORE_LOCATION,
-			                                           TRUST_STORE_PASSWORD))
-
+			 .childHandler(new HexDumpProxyInitializer("localhost", 8000))
 			 .childOption(ChannelOption.AUTO_READ, false).bind(LOCAL_PORT).sync().channel()
 			 .closeFuture().sync();
 		} finally {
@@ -74,46 +66,5 @@ public class HexDumpProxy {
 
 	}
 
-	/**
-	 * reads the properties and starts the execution environment.
-	 */
-	private static void init() {
-		InputStream input = null;
-
-		try {
-
-			input = new FileInputStream("src/main/resources/config.properties");
-
-			// load a properties file
-			prop.load(input);
-
-			SECURE_PROXY = Boolean.parseBoolean(prop.getProperty("secureProxy"));
-
-			LOCAL_PORT = Integer.parseInt(prop.getProperty("localPort"));
-
-			REMOTE_HOST = String.valueOf(prop.getProperty("remoteHost"));
-
-			REMOTE_PORT = Integer.parseInt(prop.getProperty("remotePort"));
-
-			TRUST_STORE_LOCATION = String.valueOf(prop.getProperty("truststore"));
-			TRUST_STORE_PASSWORD = String.valueOf(prop.getProperty("truststorepassword"));
-
-			KEY_STORE_LOCATION = String.valueOf(prop.getProperty("keystore"));
-			KEY_STORE_PASSWORD = String.valueOf(prop.getProperty("keystorepassword"));
-
-			SECURE_BACKEND = Boolean.parseBoolean(prop.getProperty("secureBackend"));
-
-		} catch (IOException ex) {
-			LOGGER.error("Exception was thrown while loading properties", ex);
-		} finally {
-			if (input != null) {
-				try {
-					input.close();
-				} catch (IOException e) {
-					LOGGER.error("Exception was thrown while closing the input stream", e);
-				}
-			}
-		}
-	}
 
 }

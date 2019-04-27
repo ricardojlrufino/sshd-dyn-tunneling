@@ -22,19 +22,12 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 public class HexDumpProxyFrontendHandler extends ChannelInboundHandlerAdapter {
 	private final String remoteHost;
 	private final int remotePort;
-	private final boolean isSecureBackend;
-	private final String trustStoreLocation;
-	private final String trustStorePassword;
 
 	private volatile Channel outboundChannel;
 
-	public HexDumpProxyFrontendHandler(String remoteHost, int remotePort, boolean isSecuredBackend,
-	                                   String trustStoreLocation, String trustStorePassword) {
+	public HexDumpProxyFrontendHandler(String remoteHost, int remotePort) {
 		this.remoteHost = remoteHost;
 		this.remotePort = remotePort;
-		this.isSecureBackend = isSecuredBackend;
-		this.trustStoreLocation = trustStoreLocation;
-		this.trustStorePassword = trustStorePassword;
 	}
 
 	@Override
@@ -46,8 +39,7 @@ public class HexDumpProxyFrontendHandler extends ChannelInboundHandlerAdapter {
 		// b.group(inboundChannel.eventLoop()).channel(ctx.channel().getClass())
 		b.group(new NioEventLoopGroup())
 		 .channel(NioSocketChannel.class)
-		 .handler(new SecureProxyInitializer(inboundChannel, isSecureBackend, trustStoreLocation,
-		                                     trustStorePassword))
+		 .handler(new SecureProxyInitializer(inboundChannel))
 		 .option(ChannelOption.AUTO_READ, false);
 		ChannelFuture f = b.connect(remoteHost, remotePort);
 		outboundChannel = f.channel();

@@ -18,11 +18,8 @@ import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
-import io.netty.handler.ssl.SslHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.net.ssl.SSLEngine;
 
 /**
  * Creates a newly configured {@link io.netty.channel.ChannelPipeline} for a new
@@ -31,19 +28,10 @@ import javax.net.ssl.SSLEngine;
 public class SecureProxyInitializer extends ChannelInitializer<SocketChannel> {
 
 	private Channel inbound;
-
-	private final boolean isSecureBackend;
-	private final String trustStoreLocation;
-	private final String trustStorePassword;
-
 	private static final Logger LOGGER = LoggerFactory.getLogger(SecureProxyInitializer.class);
 
-	public SecureProxyInitializer(Channel inbound, boolean isSecureBackend,
-	                              String trustStoreLocation, String trustStorePassword) {
+	public SecureProxyInitializer(Channel inbound) {
 		this.inbound = inbound;
-		this.isSecureBackend = isSecureBackend;
-		this.trustStoreLocation = trustStoreLocation;
-		this.trustStorePassword = trustStorePassword;
 	}
 
 	@Override
@@ -57,17 +45,6 @@ public class SecureProxyInitializer extends ChannelInitializer<SocketChannel> {
 		// and server in the real world.
 
 		pipeline.addLast(new LoggingHandler(LogLevel.DEBUG));
-
-		if (isSecureBackend) {
-			LOGGER.info("Adding the SSL Handler to the pipeline");
-
-			SSLEngine engine =
-			                   SSLUtil.createClientSSLContext(trustStoreLocation,
-			                                                  trustStorePassword).createSSLEngine();
-			engine.setUseClientMode(true);
-
-			pipeline.addLast("ssl", new SslHandler(engine));
-		}
 
 		pipeline.addLast(new HexDumpProxyBackendHandler(inbound));
 	}

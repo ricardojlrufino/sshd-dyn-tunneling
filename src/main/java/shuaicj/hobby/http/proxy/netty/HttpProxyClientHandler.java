@@ -14,10 +14,10 @@
 package shuaicj.hobby.http.proxy.netty;
 
 import io.netty.bootstrap.Bootstrap;
-import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
-import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.nio.NioSocketChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,70 +32,65 @@ public class HttpProxyClientHandler extends ChannelInboundHandlerAdapter {
     private Channel clientChannel;
     private Channel remoteChannel;
 
-    private HttpProxyClientHeader header;
+//    private HttpProxyClientHeader header;
     private Logger logger = LoggerFactory.getLogger(HttpProxyClientHandler.class);
 
     public HttpProxyClientHandler(String id) {
         this.id = id;
-        this.header = new HttpProxyClientHeader();
+//        this.header = new HttpProxyClientHeader();
     }
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) {
-        clientChannel = ctx.channel();
-    }
 
-    @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) {
-        if (header.isComplete()) {
-            remoteChannel.writeAndFlush(msg); // just forward
-            return;
-        }
+        final Channel inboundChannel = ctx.channel();
+        clientChannel = inboundChannel;
 
-        ByteBuf in = (ByteBuf) msg;
-        header.digest(in);
-
-        if (!header.isComplete()) {
-            in.release();
-            return;
-        }
-
-        logger.info(id + " {}", header);
-        clientChannel.config().setAutoRead(false); // disable AutoRead until remote connection is ready
-
-        if (header.isHttps()) { // if https, respond 200 to create tunnel
-            clientChannel.writeAndFlush(Unpooled.wrappedBuffer("HTTP/1.1 200 Connection Established\r\n\r\n".getBytes()));
-        }
-
+        // Start the connection attempt.
         Bootstrap b = new Bootstrap();
-        b.group(clientChannel.eventLoop()) // use the same EventLoop
-                .channel(clientChannel.getClass())
-                .handler(new ChannelInitializer<SocketChannel>() {
-                    @Override
-                    public void initChannel(SocketChannel ch) throws Exception {
-                        ch.pipeline().addLast(
-//                                new HttpSnoopClientHandler2(),
-                                new HttpProxyRemoteHandler(id, clientChannel)
-                        );
-                    }
-                });
-//                .handler(new HttpProxyRemoteHandler(id, clientChannel));
+        // b.group(inboundChannel.eventLoop()).channel(ctx.channel().getClass())
+        b.group(new NioEventLoopGroup())
+                .channel(NioSocketChannel.class)
+                .handler(new HttpProxyRemoteHandler(id, clientChannel))
+                .option(ChannelOption.AUTO_READ, false);
 
         ChannelFuture f = b.connect("191.17.14.7", 8000);
         remoteChannel = f.channel();
 
-        f.addListener((ChannelFutureListener) future -> {
-            if (future.isSuccess()) {
-                clientChannel.config().setAutoRead(true); // connection is ready, enable AutoRead
-                if (!header.isHttps()) { // forward header and remaining bytes
-                    remoteChannel.write(header.getByteBuf());
+        f.addListener(new ChannelFutureListener() {
+            @Override
+            public void operationComplete(ChannelFuture future) {
+                if (future.isSuccess()) {
+                    // connection complete start to read first data
+                    inboundChannel.read();
+                } else {
+                    // Close the connection if the connection attempt has
+                    // failed.Smartphone
+                    inboundChannel.close();
                 }
-                remoteChannel.writeAndFlush(in);
-            } else {
-                in.release();
-                clientChannel.close();
             }
         });
+    }
+
+    @Override
+    public void channelRead(final ChannelHandlerContext ctx, Object msg) {
+        if (remoteChannel.isActive()) {
+			/*
+			 * Sends the client request to the backend service.
+			 */
+            remoteChannel.writeAndFlush(msg).addListener(new ChannelFutureListener() {
+                @Override
+                public void operationComplete(ChannelFuture future) {
+                    if (future.isSuccess()) {
+                        // was able to flush out data, start to read the next
+                        // chunk
+                        ctx.channel().read();
+                    } else {
+                        future.channel().close();
+                    }
+                }
+            });
+        }
     }
 
     @Override

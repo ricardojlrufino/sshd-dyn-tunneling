@@ -14,10 +14,7 @@
 package shuaicj.hobby.http.proxy.netty;
 
 import io.netty.buffer.Unpooled;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,11 +39,21 @@ public class HttpProxyRemoteHandler extends ChannelInboundHandlerAdapter {
     @Override
     public void channelActive(ChannelHandlerContext ctx) {
         this.remoteChannel = ctx.channel();
+        ctx.read();
+        ctx.write(Unpooled.EMPTY_BUFFER);
     }
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
-        clientChannel.writeAndFlush(msg); // just forward
+        clientChannel.writeAndFlush(msg).addListener(new ChannelFutureListener() {
+            public void operationComplete(ChannelFuture future) {
+                if (future.isSuccess()) {
+                    ctx.channel().read();
+                } else {
+                    future.channel().close();
+                }
+            }
+        });
     }
 
     @Override

@@ -16,6 +16,8 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.SocketChannel;
+import io.netty.handler.codec.http.HttpRequestEncoder;
+import io.netty.handler.codec.http.HttpResponseDecoder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,6 +50,8 @@ public class BackendProxyInitializer extends ChannelInitializer<SocketChannel> {
 //		pipeline.addLast(new ChunkedWriteHandler());
 //		pipeline.addLast(new HttpSnoopClientHandler2());
 //        pipeline.addLast("encode",new HttpRequestEncoder());
+        pipeline.addLast("encoder", new HttpRequestEncoder());
+        pipeline.addLast("decoder", new HttpResponseDecoder());
 		pipeline.addLast(new HexDumpProxyBackendHandler(inbound));
 	}
 }

@@ -44,7 +44,7 @@ public class HexDumpProxy {
                     .channel(NioServerSocketChannel.class)
                     .option(ChannelOption.SO_KEEPALIVE, true)
                     .handler(new LoggingHandler(LogLevel.INFO))
-                    .childHandler(new HexDumpProxyInitializer("191.17.14.7", 8000)) // 192.168.15.16
+                    .childHandler(new FrontendProxyInitializer("191.17.14.7", 8000)) // 192.168.15.16
                     .childOption(ChannelOption.AUTO_READ, false).bind(LOCAL_PORT).sync().channel()
                     .closeFuture().sync();
         } finally {

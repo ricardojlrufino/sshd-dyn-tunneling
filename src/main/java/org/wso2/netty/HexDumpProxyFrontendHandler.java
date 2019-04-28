@@ -20,8 +20,11 @@ import io.netty.channel.*;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpRequestDecoder;
+import io.netty.handler.codec.http.cookie.ServerCookieDecoder;
 import shuaicj.hobby.http.proxy.netty.HttpSnoopClientHandler2;
 
 public class HexDumpProxyFrontendHandler extends ChannelInboundHandlerAdapter {
@@ -71,16 +74,6 @@ public class HexDumpProxyFrontendHandler extends ChannelInboundHandlerAdapter {
 			 * Sends the client request to the backend service.
 			 */
 
-//			if(msg instanceof HttpRequest) {
-//                StringBuilder buffer = new StringBuilder();
-//                HttpMessageUtil.appendRequest(buffer, (HttpRequest) msg);
-//                System.out.println(" >>> req: " + buffer);
-//                msg = Unpooled.copiedBuffer(buffer.toString().getBytes());
-//                System.out.println("------------------------------------------------------------");
-//            }else if(msg instanceof LastHttpContent){
-//                msg = Unpooled.EMPTY_BUFFER;
-//            }
-
             HttpSnoopClientHandler2 clientHandler2 = new HttpSnoopClientHandler2();
             EmbeddedChannel embeddedChannel = new EmbeddedChannel(new HttpRequestDecoder(),  clientHandler2);
             embeddedChannel.writeInbound(Unpooled.copiedBuffer((ByteBuf) msg));
@@ -88,8 +81,30 @@ public class HexDumpProxyFrontendHandler extends ChannelInboundHandlerAdapter {
 
             HttpRequest request = clientHandler2.getRequest();
 
-            System.out.println("FINAL: " + request.uri());
-            System.out.println("=====================");
+            if(request != null){
+                request.headers().getAll(HttpHeaderNames.COOKIE).forEach(h -> {
+                    ServerCookieDecoder.STRICT.decode(h).forEach(c -> {
+                        System.out.println("Cookie :" + c);
+                    });
+                });
+
+                HttpHeaders headers = request.headers();
+                if (!headers.isEmpty()) {
+                    for (String name : headers.names()) {
+                        for (String value : headers.getAll(name)) {
+                            System.out.println("HEADER: " + name + " = " + value);
+                        }
+                    }
+                    System.out.println();
+                }
+
+                System.out.println("FINAL: " + request.uri());
+                System.out.println("=====================");
+            }else{
+                System.out.println("REQUEST NOT DECODED !!");
+            }
+
+
 
             outboundChannel.writeAndFlush(msg).addListener(new ChannelFutureListener() {
 				@Override

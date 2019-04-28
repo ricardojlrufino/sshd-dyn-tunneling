@@ -13,10 +13,8 @@
 
 package org.wso2.netty;
 
-import io.netty.buffer.ByteBufHolder;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
-import io.netty.handler.codec.http.HttpRequest;
 
 public class HexDumpProxyBackendHandler extends ChannelInboundHandlerAdapter {
 	private final Channel inboundChannel;
@@ -34,54 +32,15 @@ public class HexDumpProxyBackendHandler extends ChannelInboundHandlerAdapter {
 	@Override
 	public void channelRead(final ChannelHandlerContext ctx, Object msg) {
 		// Sends the response from the backend service to the client.
-
-		if(msg instanceof HttpRequest){
-			HttpRequest request = (HttpRequest) msg;
-			ByteBufHolder holder  = (ByteBufHolder) request;
-			System.out.println("Request Bacend !!! >>>>>>>> "  + holder.content());
-//			try {
-//				HttpRequestEncoder encoder = new HttpRequestEncoder();
-//
-//                inboundChannel.
-//
-//                ChannelPromise channelPromise = new DefaultChannelPromise(inboundChannel);
-//                encoder.write(ctx, request, channelPromise);
-//
-//            } catch (HttpPostRequestEncoder.ErrorDataEncoderException e) {
-//				e.printStackTrace();
-//			} catch (Exception e) {
-//                e.printStackTrace();
-//
-            StringBuffer sb = new StringBuffer();
-
-            sb.append("GET / HTTP/1.1").append("\r\n");
-            sb.append("User-Agent: Mozilla/4.0 (compatible; MSIE5.01; Windows NT)").append("\r\n");
-            sb.append("Host: localhost").append("\r\n");
-            sb.append("Accept-Language: en-us").append("\r\n");
-            sb.append("Accept-Encoding: gzip, deflate").append("\r\n");
-            sb.append("Connection: Keep-Alive").append("\r\n");
-
-            inboundChannel.writeAndFlush(sb.toString()).addListener(new ChannelFutureListener() {
-				public void operationComplete(ChannelFuture future) {
-					if (future.isSuccess()) {
-						ctx.channel().read();
-					} else {
-						future.channel().close();
-					}
-				}
-			});
-
-		}else{
-			inboundChannel.writeAndFlush(msg).addListener(new ChannelFutureListener() {
-				public void operationComplete(ChannelFuture future) {
-					if (future.isSuccess()) {
-						ctx.channel().read();
-					} else {
-						future.channel().close();
-					}
-				}
-			});
-		}
+        inboundChannel.writeAndFlush(msg).addListener(new ChannelFutureListener() {
+            public void operationComplete(ChannelFuture future) {
+                if (future.isSuccess()) {
+                    ctx.channel().read();
+                } else {
+                    future.channel().close();
+                }
+            }
+        });
 
 	}
 

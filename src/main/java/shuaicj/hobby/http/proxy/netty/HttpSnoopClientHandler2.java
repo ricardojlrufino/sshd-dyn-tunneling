@@ -13,15 +13,33 @@
 
 package shuaicj.hobby.http.proxy.netty;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.handler.codec.http.*;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpRequest;
 
 public class HttpSnoopClientHandler2 extends ChannelInboundHandlerAdapter {
 
+    private HttpRequest request;
+
+    public HttpRequest getRequest() {
+        return request;
+    }
+
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
+
+//        HttpProxyClientHeader header = new HttpProxyClientHeader();
+//        header.digest((ByteBuf) msg);
+
+        if(msg instanceof ByteBuf) {
+            String teste = formatByteBuf(ctx, "teste", (ByteBuf) msg);
+            System.out.println("BYTEBUFFER >>> " + teste);
+        }
+
         if (msg instanceof HttpRequest) {
-            HttpRequest request = (HttpRequest) msg;
+            request = (HttpRequest) msg;
 
             System.out.println("URI: " + request.uri());
             System.out.println("VERSION: " + request.getProtocolVersion());
@@ -39,9 +57,7 @@ public class HttpSnoopClientHandler2 extends ChannelInboundHandlerAdapter {
             }
 
             if (HttpHeaders.isTransferEncodingChunked(request)) {
-                System.out.println("CHUNKED CONTENT {");
-            } else {
-                System.out.println("CONTENT {");
+                System.out.println("CHUNKED CONTENT !!!");
             }
         }
 
@@ -55,5 +71,19 @@ public class HttpSnoopClientHandler2 extends ChannelInboundHandlerAdapter {
         ctx.close();
     }
 
+
+
+    private static String formatByteBuf(ChannelHandlerContext ctx, String eventName, ByteBuf msg) {
+        String chStr = ctx.channel().toString();
+        int length = msg.readableBytes();
+        if (length == 0) {
+            StringBuilder buf = new StringBuilder(chStr.length() + 1 + eventName.length() + 4);
+            buf.append(chStr).append(' ').append(eventName).append(": 0B");
+            return buf.toString();
+        } else {
+            byte[] bytes = ByteBufUtil.getBytes(msg);
+            return new String(bytes);
+        }
+    }
 
 }

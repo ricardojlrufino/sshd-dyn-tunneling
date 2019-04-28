@@ -14,10 +14,15 @@
 package org.wso2.netty;
 
 import io.netty.bootstrap.Bootstrap;
+import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
+import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpRequestDecoder;
+import shuaicj.hobby.http.proxy.netty.HttpSnoopClientHandler2;
 
 public class HexDumpProxyFrontendHandler extends ChannelInboundHandlerAdapter {
 	private final String remoteHost;
@@ -39,7 +44,7 @@ public class HexDumpProxyFrontendHandler extends ChannelInboundHandlerAdapter {
 		// b.group(inboundChannel.eventLoop()).channel(ctx.channel().getClass())
 		b.group(new NioEventLoopGroup())
 		 .channel(NioSocketChannel.class)
-		 .handler(new SecureProxyInitializer(inboundChannel))
+		 .handler(new BackendProxyInitializer(inboundChannel))
 		 .option(ChannelOption.AUTO_READ, false);
 		ChannelFuture f = b.connect(remoteHost, remotePort);
 		outboundChannel = f.channel();
@@ -65,7 +70,28 @@ public class HexDumpProxyFrontendHandler extends ChannelInboundHandlerAdapter {
 			/*
 			 * Sends the client request to the backend service.
 			 */
-			outboundChannel.writeAndFlush(msg).addListener(new ChannelFutureListener() {
+
+//			if(msg instanceof HttpRequest) {
+//                StringBuilder buffer = new StringBuilder();
+//                HttpMessageUtil.appendRequest(buffer, (HttpRequest) msg);
+//                System.out.println(" >>> req: " + buffer);
+//                msg = Unpooled.copiedBuffer(buffer.toString().getBytes());
+//                System.out.println("------------------------------------------------------------");
+//            }else if(msg instanceof LastHttpContent){
+//                msg = Unpooled.EMPTY_BUFFER;
+//            }
+
+            HttpSnoopClientHandler2 clientHandler2 = new HttpSnoopClientHandler2();
+            EmbeddedChannel embeddedChannel = new EmbeddedChannel(new HttpRequestDecoder(),  clientHandler2);
+            embeddedChannel.writeInbound(Unpooled.copiedBuffer((ByteBuf) msg));
+            embeddedChannel.close();
+
+            HttpRequest request = clientHandler2.getRequest();
+
+            System.out.println("FINAL: " + request.uri());
+            System.out.println("=====================");
+
+            outboundChannel.writeAndFlush(msg).addListener(new ChannelFutureListener() {
 				@Override
 				public void operationComplete(ChannelFuture future) {
 					if (future.isSuccess()) {

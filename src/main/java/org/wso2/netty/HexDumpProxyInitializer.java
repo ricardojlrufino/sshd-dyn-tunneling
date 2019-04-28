@@ -18,19 +18,19 @@ import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.SocketChannel;
 
 public class HexDumpProxyInitializer extends ChannelInitializer<SocketChannel> {
-	private final String remoteHost;
-	private final int remotePort;
+    private final String remoteHost;
+    private final int remotePort;
 
-	public HexDumpProxyInitializer(String remoteHost, int remotePort) {
-		this.remoteHost = remoteHost;
-		this.remotePort = remotePort;
-	}
+    public HexDumpProxyInitializer(String remoteHost, int remotePort) {
+        this.remoteHost = remoteHost;
+        this.remotePort = remotePort;
+    }
 
-	@Override
-	protected void initChannel(SocketChannel ch) throws Exception {
-		ChannelPipeline pipeline = ch.pipeline();
+    @Override
+    protected void initChannel(SocketChannel ch) throws Exception {
+        ChannelPipeline pipeline = ch.pipeline();
 
-		pipeline.addLast(
+        pipeline.addLast(
 //				new LoggingHandler(LogLevel.INFO),
 //                new HttpResponseEncoder(),
 //                new HttpRequestDecoder(),
@@ -38,8 +38,10 @@ public class HexDumpProxyInitializer extends ChannelInitializer<SocketChannel> {
 //                new ChunkedWriteHandler(),
 //                new HttpSnoopClientHandler2(),
 //                new HttpSnoopClientHandler(),
-				new HexDumpProxyFrontendHandler(remoteHost, remotePort)
-		);
+//                new HttpSnoopClientHandler2(),
+//                new HttpRequestEncoder(),
+                new HexDumpProxyFrontendHandler(remoteHost, remotePort)
+        );
 
-	}
+    }
 }

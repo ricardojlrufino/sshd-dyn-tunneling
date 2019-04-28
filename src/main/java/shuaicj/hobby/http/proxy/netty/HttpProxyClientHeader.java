@@ -38,6 +38,7 @@ public class HttpProxyClientHeader {
                 throw new IllegalStateException("already complete");
             }
             String line = readLine(in);
+            System.out.println("LINE: " + line);
             if (line == null) {
                 return;
             }
@@ -56,14 +57,14 @@ public class HttpProxyClientHeader {
                     port = 80; // http
                 }
             }
-            if (line.isEmpty()) {
-                if (host == null || port == 0) {
-                    throw new IllegalStateException("cannot find header \'Host\'");
-                }
-                byteBuf = byteBuf.asReadOnly();
-                complete = true;
-                break;
-            }
+//            if (line.isEmpty()) {
+//                if (host == null || port == 0) {
+//                    throw new IllegalStateException("cannot find header \'Host\'");
+//                }
+//                byteBuf = byteBuf.asReadOnly();
+//                complete = true;
+//                break;
+//            }
         }
     }
 

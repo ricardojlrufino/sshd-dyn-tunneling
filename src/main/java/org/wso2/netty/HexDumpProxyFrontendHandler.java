@@ -87,7 +87,7 @@ public class HexDumpProxyFrontendHandler extends ChannelInboundHandlerAdapter {
 			 * Keeps the TCP connection alive. If you do not need that feature
 			 * please uncomment the following commented line of code.
 			 */
-			// closeOnFlush(outboundChannel);
+			 closeOnFlush(outboundChannel);
 		}
 	}
 

@@ -16,8 +16,6 @@ package org.wso2.netty;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.SocketChannel;
-import io.netty.handler.logging.LogLevel;
-import io.netty.handler.logging.LoggingHandler;
 
 public class HexDumpProxyInitializer extends ChannelInitializer<SocketChannel> {
 	private final String remoteHost;
@@ -33,7 +31,13 @@ public class HexDumpProxyInitializer extends ChannelInitializer<SocketChannel> {
 		ChannelPipeline pipeline = ch.pipeline();
 
 		pipeline.addLast(
-				new LoggingHandler(LogLevel.INFO),
+//				new LoggingHandler(LogLevel.INFO),
+//                new HttpResponseEncoder(),
+//                new HttpRequestDecoder(),
+//                new HttpObjectAggregator(4028),
+//                new ChunkedWriteHandler(),
+//                new HttpSnoopClientHandler2(),
+//                new HttpSnoopClientHandler(),
 				new HexDumpProxyFrontendHandler(remoteHost, remotePort)
 		);
 

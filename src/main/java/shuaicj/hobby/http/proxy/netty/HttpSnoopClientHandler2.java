@@ -27,7 +27,7 @@ public class HttpSnoopClientHandler2 extends ChannelInboundHandlerAdapter {
             System.out.println("VERSION: " + request.getProtocolVersion());
             System.out.println();
 
-            request.headers().add("Host", "homologacao2.edu3.com.br");
+//            request.headers().add("Host", "homologacao2.edu3.com.br");
 
             if (!request.headers().isEmpty()) {
                 for (String name : request.headers().names()) {
@@ -44,6 +44,8 @@ public class HttpSnoopClientHandler2 extends ChannelInboundHandlerAdapter {
                 System.out.println("CONTENT {");
             }
         }
+
+        ctx.fireChannelRead(msg);
     }
 
     @Override

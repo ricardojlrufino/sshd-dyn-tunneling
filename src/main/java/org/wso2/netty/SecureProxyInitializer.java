@@ -16,8 +16,6 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.SocketChannel;
-import io.netty.handler.logging.LogLevel;
-import io.netty.handler.logging.LoggingHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,7 +42,7 @@ public class SecureProxyInitializer extends ChannelInitializer<SocketChannel> {
 		// You will need something more complicated to identify both
 		// and server in the real world.
 
-		pipeline.addLast(new LoggingHandler(LogLevel.DEBUG));
+//		pipeline.addLast(new LoggingHandler(LogLevel.DEBUG));
 
 		pipeline.addLast(new HexDumpProxyBackendHandler(inbound));
 	}

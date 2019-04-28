@@ -55,6 +55,8 @@ public class HttpSnoopClientHandler extends SimpleChannelInboundHandler<HttpObje
                 System.out.println("} END OF CONTENT");
             }
         }
+
+        ctx.fireChannelRead(msg);
     }
 
     @Override

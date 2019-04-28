@@ -23,48 +23,36 @@ import io.netty.handler.logging.LoggingHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Properties;
-
 
 public class HexDumpProxy {
-	private static int LOCAL_PORT = 9292;
-	private static String REMOTE_HOST = null;
-	private static int REMOTE_PORT;
-	private static Properties prop = new Properties();
-	private static boolean SECURE_PROXY = false;
+    private static int LOCAL_PORT = 9292;
+    private static String REMOTE_HOST = null;
+    private static int REMOTE_PORT;
 
-	static String TRUST_STORE_LOCATION;
-	static String TRUST_STORE_PASSWORD;
+    private static final Logger LOGGER = LoggerFactory.getLogger(HexDumpProxy.class);
 
-	private static String KEY_STORE_LOCATION;
-	private static String KEY_STORE_PASSWORD;
+    public static void main(String[] args) throws InterruptedException {
 
-	private static boolean SECURE_BACKEND;
+        LOGGER.info("Proxying *:" + LOCAL_PORT + " to " + REMOTE_HOST + ':' + REMOTE_PORT + " ...");
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(HexDumpProxy.class);
+        // Configure the bootstrap.
+        EventLoopGroup bossGroup = new NioEventLoopGroup(1);
+        EventLoopGroup workerGroup = new NioEventLoopGroup();
+        try {
+            ServerBootstrap b = new ServerBootstrap();
+            b.group(bossGroup, workerGroup)
+                    .channel(NioServerSocketChannel.class)
+                    .option(ChannelOption.SO_KEEPALIVE, true)
+                    .handler(new LoggingHandler(LogLevel.INFO))
+                    .childHandler(new HexDumpProxyInitializer("localhost", 8000))
+                    .childOption(ChannelOption.AUTO_READ, false).bind(LOCAL_PORT).sync().channel()
+                    .closeFuture().sync();
+        } finally {
+            bossGroup.shutdownGracefully();
+            workerGroup.shutdownGracefully();
+        }
 
-	public static void main(String[] args) throws InterruptedException {
-
-		LOGGER.info("Proxying *:" + LOCAL_PORT + " to " + REMOTE_HOST + ':' + REMOTE_PORT + " ...");
-
-		// Configure the bootstrap.
-		EventLoopGroup bossGroup = new NioEventLoopGroup(1);
-		EventLoopGroup workerGroup = new NioEventLoopGroup();
-		try {
-			ServerBootstrap b = new ServerBootstrap();
-			b.group(bossGroup, workerGroup)
-			 .channel(NioServerSocketChannel.class)
-			 .option(ChannelOption.SO_KEEPALIVE, true)
-			 .handler(new LoggingHandler(LogLevel.INFO))
-			 .childHandler(new HexDumpProxyInitializer("localhost", 8000))
-			 .childOption(ChannelOption.AUTO_READ, false).bind(LOCAL_PORT).sync().channel()
-			 .closeFuture().sync();
-		} finally {
-			bossGroup.shutdownGracefully();
-			workerGroup.shutdownGracefully();
-		}
-
-	}
+    }
 
 
 }

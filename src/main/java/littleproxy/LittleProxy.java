@@ -13,10 +13,11 @@
 
 package littleproxy;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.http.*;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.cookie.ServerCookieDecoder;
 import org.littleshoot.proxy.HttpFilters;
 import org.littleshoot.proxy.HttpFiltersAdapter;
@@ -47,7 +48,7 @@ public class LittleProxy {
                                         // TODO: implement your filtering here
                                         if(httpObject instanceof  HttpRequest){
                                             HttpRequest request = (HttpRequest) httpObject;
-                                            request.headers().set("Host", "homologacao2.edu3.com.br");
+                                            request.headers().set("Host", "localhost:8001");
 
                                             // Check selected device in cookie
 
@@ -63,15 +64,15 @@ public class LittleProxy {
                                             });
 
 
-                                            // Check if have select device.
-                                            if(!hasCurrentDevice.get()){
-                                                ByteBuf buffer = Unpooled.wrappedBuffer(Unpooled.EMPTY_BUFFER);
-                                                HttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.TEMPORARY_REDIRECT, buffer);
-//                                            HttpHeaders.setContentLength(response, buffer.readableBytes());
-                                                HttpHeaders.setHeader(response, HttpHeaderNames.LOCATION, "http://www.google.com");
-                                                return response;
-
-                                            }
+//                                            // Check if have select device.
+//                                            if(!hasCurrentDevice.get()){
+//                                                ByteBuf buffer = Unpooled.wrappedBuffer(Unpooled.EMPTY_BUFFER);
+//                                                HttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.TEMPORARY_REDIRECT, buffer);
+////                                            HttpHeaders.setContentLength(response, buffer.readableBytes());
+//                                                HttpHeaders.setHeader(response, HttpHeaderNames.LOCATION, "http://www.google.com");
+//                                                return response;
+//
+//                                            }
 
                                         }
                                         return null;

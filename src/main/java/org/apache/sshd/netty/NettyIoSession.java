@@ -19,30 +19,23 @@
 
 package org.apache.sshd.netty;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.*;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.cookie.ServerCookieDecoder;
+import io.netty.util.Attribute;
+import org.apache.sshd.common.future.CloseFuture;
+import org.apache.sshd.common.future.DefaultCloseFuture;
+import org.apache.sshd.common.io.*;
+import org.apache.sshd.common.util.buffer.Buffer;
+import org.apache.sshd.common.util.closeable.AbstractCloseable;
+import sshd.HttpRequestExtractHandler;
+
 import java.net.SocketAddress;
 import java.util.HashMap;
 import java.util.Map;
-
-import org.apache.sshd.common.future.CloseFuture;
-import org.apache.sshd.common.future.DefaultCloseFuture;
-import org.apache.sshd.common.io.AbstractIoWriteFuture;
-import org.apache.sshd.common.io.IoConnectFuture;
-import org.apache.sshd.common.io.IoHandler;
-import org.apache.sshd.common.io.IoService;
-import org.apache.sshd.common.io.IoSession;
-import org.apache.sshd.common.io.IoWriteFuture;
-import org.apache.sshd.common.util.buffer.Buffer;
-import org.apache.sshd.common.util.closeable.AbstractCloseable;
-
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.channel.ChannelPromise;
-import io.netty.util.Attribute;
 
 /**
  * The Netty based IoSession implementation.
@@ -223,6 +216,25 @@ public class NettyIoSession extends AbstractCloseable implements IoSession {
 
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+
+            if(msg instanceof  ByteBuf) {
+                HttpRequestExtractHandler conversor = new HttpRequestExtractHandler();
+                HttpRequest request = conversor.decode(Unpooled.copiedBuffer((ByteBuf) msg));
+                if (request != null) {
+
+                    // ctx.channel().attr(HttpRequestExtractHandler.ATTR_HOST).set(request.headers().get(HttpHeaderNames.HOST));
+
+                    NettyIoSession.this.setAttribute(HttpRequestExtractHandler.ATTR_HOST, request.headers().get(HttpHeaderNames.HOST));
+
+                    System.err.println("Rquest : "+ request);
+                    request.headers().getAll(HttpHeaderNames.COOKIE).forEach(h -> {
+                        ServerCookieDecoder.STRICT.decode(h).forEach(c -> {
+                            System.out.println("Cookie :" + c);
+                        });
+                    });
+                }
+            }
+
             NettyIoSession.this.channelRead(ctx, msg);
         }
 

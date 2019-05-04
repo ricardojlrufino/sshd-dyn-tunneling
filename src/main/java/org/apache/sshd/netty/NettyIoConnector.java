@@ -24,15 +24,12 @@ import io.netty.channel.*;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.http.HttpRequestDecoder;
-import io.netty.handler.codec.http.HttpResponseEncoder;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.util.concurrent.GlobalEventExecutor;
 import org.apache.sshd.common.AttributeRepository;
 import org.apache.sshd.common.future.DefaultSshFuture;
 import org.apache.sshd.common.io.*;
-import sshd.HttpFilterClientHandler;
 
 import java.net.SocketAddress;
 
@@ -79,9 +76,9 @@ public class NettyIoConnector extends NettyIoService implements IoConnector {
 
                         ChannelPipeline p = ch.pipeline();
                         p.addLast(new LoggingHandler(LogLevel.INFO));   // TODO make this configurable
-                        p.addLast(new HttpRequestDecoder());
-                        p.addLast(new HttpResponseEncoder());
-                        p.addLast(new HttpFilterClientHandler());
+//                        p.addLast(new HttpRequestDecoder());
+//                        p.addLast(new HttpResponseEncoder());
+//                        p.addLast(new HttpFilterClientHandler());
                         p.addLast(session.adapter);
                     } catch (Exception e) {
                         if (listener != null) {

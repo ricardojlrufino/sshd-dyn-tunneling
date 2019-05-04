@@ -1081,6 +1081,11 @@ public class MyDefaultForwardingFilter extends AbstractInnerCloseable
 
         @Override
         public void messageReceived(IoSession session, Readable message) throws Exception {
+
+            Object host = session.getAttribute(HttpRequestExtractHandler.ATTR_HOST);
+
+            System.err.println(" messageReceived >>> host: " + host);
+
             TcpipClientChannel channel = (TcpipClientChannel) session.getAttribute(TcpipClientChannel.class);
             long totalMessages = messagesCounter.incrementAndGet();
             Buffer buffer = new ByteArrayBuffer(message.available() + Long.SIZE, false);

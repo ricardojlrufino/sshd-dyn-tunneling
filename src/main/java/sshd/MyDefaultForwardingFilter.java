@@ -246,7 +246,8 @@ public class MyDefaultForwardingFilter extends AbstractInnerCloseable
                 signalTearingDownExplicitTunnel(boundAddress, true, remote);
             } finally {
                 try {
-                    acceptor.unbind(bound);
+                     acceptor.unbind(bound);
+                    // CHANGED: DISABLE UNBIND...
                 } catch (RuntimeException e) {
                     signalTornDownExplicitTunnel(boundAddress, true, remote, e);
                     throw e;
@@ -669,7 +670,7 @@ public class MyDefaultForwardingFilter extends AbstractInnerCloseable
     public synchronized SshdSocketAddress localPortForwardingRequested(SshdSocketAddress local) throws IOException {
 
         // CHANGED !!
-        local = new SshdSocketAddress(local.getHostName(), local.getPort() + portSequence.getAndIncrement()); // avoid conflics
+//        local = new SshdSocketAddress(local.getHostName(), local.getPort() + portSequence.getAndIncrement()); // avoid conflics
 
         Objects.requireNonNull(local, "Local address is null");
         ValidateUtils.checkTrue(local.getPort() >= 0, "Invalid local port: %s", local);
@@ -705,7 +706,7 @@ public class MyDefaultForwardingFilter extends AbstractInnerCloseable
             boolean added;
             synchronized (localForwards) {
                 // NOTE !!! it is crucial to use the bound address host name first
-                added = localForwards.add(new LocalForwardingEntry(result.getHostName(), local.getHostName(), result.getPort()));
+                added = localForwards.add(new LocalForwardingEntry(/*CHANGED*/local.getHostName(), local.getHostName(), result.getPort()));
             }
 
             if (!added) {
@@ -941,6 +942,10 @@ public class MyDefaultForwardingFilter extends AbstractInnerCloseable
 
         // TODO find a better way to determine the resulting bind address - what if multi-threaded calls...
         Set<SocketAddress> before = acceptor.getBoundAddresses();
+
+        // Reuse addr
+        if(!before.isEmpty()) return (InetSocketAddress) before.iterator().next();
+
         try {
             InetSocketAddress bindAddress = address.toInetSocketAddress();
             acceptor.bind(bindAddress);

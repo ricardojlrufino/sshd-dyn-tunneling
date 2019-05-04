@@ -82,9 +82,11 @@ public class SSHDTest {
         sshd.setPort(4440);
 
         sshd.setForwarderFactory(new ForwardingFilterFactory() {
+            MyDefaultForwardingFilter myDefaultForwardingFilter;
             @Override
             public ForwardingFilter create(ConnectionService service) {
-                return new MyDefaultForwardingFilter(service);
+                if(myDefaultForwardingFilter == null) myDefaultForwardingFilter = new MyDefaultForwardingFilter(service);
+                return myDefaultForwardingFilter;
             }
         });
 

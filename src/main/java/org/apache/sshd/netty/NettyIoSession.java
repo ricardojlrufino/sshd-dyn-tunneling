@@ -24,7 +24,6 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.codec.http.cookie.ServerCookieDecoder;
 import io.netty.util.Attribute;
 import org.apache.sshd.common.future.CloseFuture;
 import org.apache.sshd.common.future.DefaultCloseFuture;
@@ -221,17 +220,8 @@ public class NettyIoSession extends AbstractCloseable implements IoSession {
                 HttpRequestExtractHandler conversor = new HttpRequestExtractHandler();
                 HttpRequest request = conversor.decode(Unpooled.copiedBuffer((ByteBuf) msg));
                 if (request != null) {
-
                     // ctx.channel().attr(HttpRequestExtractHandler.ATTR_HOST).set(request.headers().get(HttpHeaderNames.HOST));
-
                     NettyIoSession.this.setAttribute(HttpRequestExtractHandler.ATTR_HOST, request.headers().get(HttpHeaderNames.HOST));
-
-                    System.err.println("Rquest : "+ request);
-                    request.headers().getAll(HttpHeaderNames.COOKIE).forEach(h -> {
-                        ServerCookieDecoder.STRICT.decode(h).forEach(c -> {
-                            System.out.println("Cookie :" + c);
-                        });
-                    });
                 }
             }
 

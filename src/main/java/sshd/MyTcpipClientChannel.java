@@ -86,8 +86,8 @@ public class MyTcpipClientChannel extends TcpipClientChannel {
         buffer.putInt(getId());
         buffer.putInt(wLocal.getSize());
         buffer.putInt(wLocal.getPacketSize());
-        buffer.putString("http1");
-//        buffer.putString(dstHost);
+//        buffer.putString("http1");
+        buffer.putString(dstHost);
 //        buffer.putInt(9000);
 //        buffer.putString(srcHost);
 //        buffer.putInt(9000); // CHANGED !

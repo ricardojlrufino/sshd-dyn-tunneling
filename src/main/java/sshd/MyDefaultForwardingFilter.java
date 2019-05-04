@@ -707,6 +707,9 @@ public class MyDefaultForwardingFilter extends AbstractInnerCloseable
             synchronized (localForwards) {
                 // NOTE !!! it is crucial to use the bound address host name first
                 added = localForwards.add(new LocalForwardingEntry(/*CHANGED*/local.getHostName(), local.getHostName(), result.getPort()));
+
+                System.err.println("add to localForwards : " + local.getHostName() + ", result.getPort(): "+ result.getPort());
+
             }
 
             if (!added) {
@@ -988,56 +991,7 @@ public class MyDefaultForwardingFilter extends AbstractInnerCloseable
 
         @Override
         public void sessionCreated(IoSession session) throws Exception {
-            InetSocketAddress local = (InetSocketAddress) session.getLocalAddress();
-            int localPort = local.getPort();
-            SshdSocketAddress remote = localToRemote.get(localPort);
-            TcpipClientChannel.Type channelType = (remote == null)
-                    ? TcpipClientChannel.Type.Forwarded
-                    : TcpipClientChannel.Type.Direct;
-            TcpipClientChannel channel = new MyTcpipClientChannel(channelType, session, remote);
-            session.setAttribute(TcpipClientChannel.class, channel);
 
-            // Propagate original requested host name - see SSHD-792
-            if (channelType == TcpipClientChannel.Type.Forwarded) {
-                SocketAddress accepted = session.getAcceptanceAddress();
-                LocalForwardingEntry localEntry = null;
-                if (accepted instanceof InetSocketAddress) {
-                    synchronized (localForwards) {
-                        localEntry = LocalForwardingEntry.findMatchingEntry(
-                                ((InetSocketAddress) accepted).getHostString(), localPort, localForwards);
-                    }
-                }
-
-                if (localEntry != null) {
-                    if (debugEnabled) {
-                        log.debug("sessionCreated({})[local={}, remote={}, accepted={}] localEntry={}",
-                                session, local, remote, accepted, localEntry);
-                    }
-//                    localEntry = new LocalForwardingEntry("", 91);
-                    channel.updateLocalForwardingEntry(localEntry);
-                } else {
-                    log.warn("sessionCreated({})[local={}, remote={}] cannot locate original local entry for accepted={}",
-                            session, local, remote, accepted);
-                }
-            } else {
-                if (debugEnabled) {
-                    log.debug("sessionCreated({}) local={}, remote={}", session, local, remote);
-                }
-            }
-
-            service.registerChannel(channel);
-            channel.open().addListener(future -> {
-                Throwable t = future.getException();
-                if (t != null) {
-                    log.warn("Failed ({}) to open channel for session={}: {}",
-                            t.getClass().getSimpleName(), session, t.getMessage());
-                    if (debugEnabled) {
-                        log.debug("sessionCreated(" + session + ") channel=" + channel + " open failure details", t);
-                    }
-                    MyDefaultForwardingFilter.this.service.unregisterChannel(channel);
-                    channel.close(false);
-                }
-            });
         }
 
         @Override
@@ -1082,9 +1036,90 @@ public class MyDefaultForwardingFilter extends AbstractInnerCloseable
         @Override
         public void messageReceived(IoSession session, Readable message) throws Exception {
 
-            Object host = session.getAttribute(HttpRequestExtractHandler.ATTR_HOST);
+            // check if if connected
+            TcpipClientChannel channel = (TcpipClientChannel) session.getAttribute(TcpipClientChannel.class);
 
-            System.err.println(" messageReceived >>> host: " + host);
+            // Need connect
+            if(channel == null){
+
+                System.err.println("  messageReceived >>  onnections ins NULL ainda... " + message);
+
+                Object host = session.getAttribute(HttpRequestExtractHandler.ATTR_HOST);
+
+                System.err.println(" messageReceived >>> host: " + host);
+
+                InetSocketAddress local = (InetSocketAddress) session.getLocalAddress();
+                int localPort = local.getPort();
+                SshdSocketAddress remote = localToRemote.get(localPort);
+                TcpipClientChannel.Type channelType = (remote == null)
+                        ? TcpipClientChannel.Type.Forwarded
+                        : TcpipClientChannel.Type.Direct;
+
+                channel = new MyTcpipClientChannel(channelType, session, remote);
+                session.setAttribute(TcpipClientChannel.class, channel);
+
+                // Propagate original requested host name - see SSHD-792
+                if (channelType == TcpipClientChannel.Type.Forwarded) {
+                    SocketAddress accepted = session.getAcceptanceAddress();
+                    LocalForwardingEntry localEntry = null;
+                    if (accepted instanceof InetSocketAddress) {
+                        synchronized (localForwards) {
+
+                            for (LocalForwardingEntry address : localForwards) {
+                                if(address.getHostName().equals(host)){
+                                    localEntry = address;
+                                    System.out.println("FOUND >>>>" + localEntry);
+                                }
+
+                            }
+
+                        }
+                    }
+
+                    if (localEntry != null) {
+                        if (debugEnabled) {
+                            log.debug("sessionCreated({})[local={}, remote={}, accepted={}] localEntry={}",
+                                    session, local, remote, accepted, localEntry);
+                        }
+                        channel.updateLocalForwardingEntry(localEntry);
+                    } else {
+                        log.warn("sessionCreated({})[local={}, remote={}] cannot locate original local entry for accepted={}",
+                                session, local, remote, accepted);
+                    }
+                } else {
+                    if (debugEnabled) {
+                        log.debug("sessionCreated({}) local={}, remote={}", session, local, remote);
+                    }
+                }
+
+                service.registerChannel(channel);
+                TcpipClientChannel finalChannel = channel;
+
+                long start = System.currentTimeMillis();
+                channel.open().addListener(future -> {
+                    Throwable t = future.getException();
+                    if (t != null) {
+                        log.warn("Failed ({}) to open channel for session={}: {}",
+                                t.getClass().getSimpleName(), session, t.getMessage());
+                        if (debugEnabled) {
+                            log.debug("sessionCreated(" + session + ") channel=" + finalChannel + " open failure details", t);
+                        }
+                        MyDefaultForwardingFilter.this.service.unregisterChannel(finalChannel);
+                        finalChannel.close(false);
+
+                    }else{ // send after connect
+
+                    }
+                }).await(5000);
+
+                System.out.println(" >>>> time : " +  (System.currentTimeMillis() - start));
+            }
+
+            sendMessage(session, message);
+
+        }
+
+        private void sendMessage(IoSession session, Readable message) throws IOException {
 
             TcpipClientChannel channel = (TcpipClientChannel) session.getAttribute(TcpipClientChannel.class);
             long totalMessages = messagesCounter.incrementAndGet();

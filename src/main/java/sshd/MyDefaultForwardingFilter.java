@@ -14,18 +14,20 @@
 package sshd;
 
 import org.apache.sshd.client.channel.ClientChannelEvent;
-import org.apache.sshd.client.channel.ClientChannelPendingMessagesQueue;
-import org.apache.sshd.client.future.OpenFuture;
 import org.apache.sshd.common.*;
 import org.apache.sshd.common.forward.*;
-import org.apache.sshd.common.io.*;
+import org.apache.sshd.common.io.IoAcceptor;
+import org.apache.sshd.common.io.IoHandler;
+import org.apache.sshd.common.io.IoHandlerFactory;
+import org.apache.sshd.common.io.IoServiceFactory;
 import org.apache.sshd.common.session.ConnectionService;
 import org.apache.sshd.common.session.Session;
 import org.apache.sshd.common.session.SessionHolder;
-import org.apache.sshd.common.util.*;
-import org.apache.sshd.common.util.Readable;
+import org.apache.sshd.common.util.EventListenerUtils;
+import org.apache.sshd.common.util.GenericUtils;
+import org.apache.sshd.common.util.Invoker;
+import org.apache.sshd.common.util.ValidateUtils;
 import org.apache.sshd.common.util.buffer.Buffer;
-import org.apache.sshd.common.util.buffer.ByteArrayBuffer;
 import org.apache.sshd.common.util.closeable.AbstractInnerCloseable;
 import org.apache.sshd.common.util.net.SshdSocketAddress;
 import org.apache.sshd.server.forward.TcpForwardingFilter;
@@ -37,8 +39,6 @@ import java.util.*;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -70,6 +70,7 @@ public class MyDefaultForwardingFilter extends AbstractInnerCloseable
     private final ConnectionService service;
     private final IoHandlerFactory socksProxyIoHandlerFactory = () -> new SocksProxy(getConnectionService());
     private final Session sessionInstance;
+    private SessionForwardHandler sessionForwardHandler;
 
     private final Object localLock = new Object();
     private final Map<Integer, SshdSocketAddress> localToRemote = new TreeMap<>(Comparator.naturalOrder());
@@ -80,17 +81,16 @@ public class MyDefaultForwardingFilter extends AbstractInnerCloseable
     private final Map<Integer, SocksProxy> dynamicLocal = new TreeMap<>(Comparator.naturalOrder());
     private final Map<Integer, InetSocketAddress> boundDynamic = new TreeMap<>(Comparator.naturalOrder());
 
-    private final Set<LocalForwardingEntry> localForwards = new HashSet<>();
-    private final IoHandlerFactory staticIoHandlerFactory = MyStaticIoHandler::new;
     private final Collection<PortForwardingEventListener> listeners = new CopyOnWriteArraySet<>();
     private final Collection<PortForwardingEventListenerManager> managersHolder = new CopyOnWriteArraySet<>();
     private final PortForwardingEventListener listenerProxy;
 
-    private IoAcceptor acceptor;
+    private static IoAcceptor acceptor;
 
-    public MyDefaultForwardingFilter(ConnectionService service) {
+    public MyDefaultForwardingFilter(ConnectionService service, SessionForwardHandler sessionForwardManager) {
         this.service = Objects.requireNonNull(service, "No connection service");
         this.sessionInstance = Objects.requireNonNull(service.getSession(), "No session");
+        this.sessionForwardHandler = sessionForwardManager;
         this.listenerProxy = EventListenerUtils.proxyWrapper(PortForwardingEventListener.class, getClass().getClassLoader(), listeners);
     }
 
@@ -177,7 +177,7 @@ public class MyDefaultForwardingFilter extends AbstractInnerCloseable
         int port;
         signalEstablishingExplicitTunnel(local, remote, true);
         try {
-            bound = doBind(local, staticIoHandlerFactory);
+            bound = doBind(local, sessionForwardHandler);
             port = bound.getPort();
             synchronized (localLock) {
                 SshdSocketAddress prevRemote = localToRemote.get(port);
@@ -246,7 +246,7 @@ public class MyDefaultForwardingFilter extends AbstractInnerCloseable
                 signalTearingDownExplicitTunnel(boundAddress, true, remote);
             } finally {
                 try {
-                     acceptor.unbind(bound);
+                     // acceptor.unbind(bound);
                     // CHANGED: DISABLE UNBIND...
                 } catch (RuntimeException e) {
                     signalTornDownExplicitTunnel(boundAddress, true, remote, e);
@@ -440,7 +440,7 @@ public class MyDefaultForwardingFilter extends AbstractInnerCloseable
         int port;
         signalEstablishingDynamicTunnel(local);
         try {
-            bound = doBind(local, socksProxyIoHandlerFactory);
+            bound = doBind(local, new SocksProxy(getConnectionService()));
             port = bound.getPort();
             synchronized (dynamicLock) {
                 SocksProxy prevProxy = dynamicLocal.get(port);
@@ -695,18 +695,21 @@ public class MyDefaultForwardingFilter extends AbstractInnerCloseable
         }
 
         signalEstablishingExplicitTunnel(local, null, true);
+
+        sessionForwardHandler.register(service, local.getHostName());
+
         SshdSocketAddress result;
         try {
-            InetSocketAddress bound = doBind(local, staticIoHandlerFactory);
+            InetSocketAddress bound = doBind(local, sessionForwardHandler);
             result = new SshdSocketAddress(bound.getHostString(), bound.getPort());
             if (log.isDebugEnabled()) {
                 log.debug("localPortForwardingRequested(" + local + "): " + result);
             }
 
             boolean added;
-            synchronized (localForwards) {
+            synchronized (sessionForwardHandler.getLocalForwards()) {
                 // NOTE !!! it is crucial to use the bound address host name first
-                added = localForwards.add(new LocalForwardingEntry(/*CHANGED*/local.getHostName(), local.getHostName(), result.getPort()));
+                added = sessionForwardHandler.getLocalForwards().add(new LocalForwardingEntry(/*CHANGED*/local.getHostName(), local.getHostName(), result.getPort()));
 
                 System.err.println("add to localForwards : " + local.getHostName() + ", result.getPort(): "+ result.getPort());
 
@@ -736,12 +739,14 @@ public class MyDefaultForwardingFilter extends AbstractInnerCloseable
     @Override
     public synchronized void localPortForwardingCancelled(SshdSocketAddress local) throws IOException {
         LocalForwardingEntry entry;
-        synchronized (localForwards) {
-            entry = LocalForwardingEntry.findMatchingEntry(local.getHostName(), local.getPort(), localForwards);
+        synchronized (sessionForwardHandler.getLocalForwards()) {
+            entry = LocalForwardingEntry.findMatchingEntry(local.getHostName(), local.getPort(), sessionForwardHandler.getLocalForwards());
             if (entry != null) {
-                localForwards.remove(entry);
+                sessionForwardHandler.getLocalForwards().remove(entry);
             }
         }
+
+        sessionForwardHandler.unregister(service);
 
         if ((entry != null) && (acceptor != null)) {
             if (log.isDebugEnabled()) {
@@ -750,7 +755,8 @@ public class MyDefaultForwardingFilter extends AbstractInnerCloseable
 
             signalTearingDownExplicitTunnel(entry, true, null);
             try {
-                acceptor.unbind(entry.toInetSocketAddress());
+                // acceptor.unbind(entry.toInetSocketAddress());
+                // CHANGED !!!
             } catch (RuntimeException e) {
                 signalTornDownExplicitTunnel(entry, true, null, e);
                 throw e;
@@ -930,16 +936,16 @@ public class MyDefaultForwardingFilter extends AbstractInnerCloseable
 
     /**
      * @param address        The request bind address
-     * @param handlerFactory A {@link Factory} to create an {@link IoHandler} if necessary
+     * @param handler A {@link IoHandler} if necessary
      * @return The {@link InetSocketAddress} to which the binding occurred
      * @throws IOException If failed to bind
      */
-    private InetSocketAddress doBind(SshdSocketAddress address, Factory<? extends IoHandler> handlerFactory) throws IOException {
+    private InetSocketAddress doBind(SshdSocketAddress address, IoHandler handler) throws IOException {
         if (acceptor == null) {
             Session session = getSession();
             FactoryManager manager = Objects.requireNonNull(session.getFactoryManager(), "No factory manager");
             IoServiceFactory factory = Objects.requireNonNull(manager.getIoServiceFactory(), "No I/O service factory");
-            IoHandler handler = handlerFactory.create();
+//            IoHandler handler = handlerFactory.create();
             acceptor = factory.createAcceptor(handler);
         }
 
@@ -979,188 +985,7 @@ public class MyDefaultForwardingFilter extends AbstractInnerCloseable
         return getClass().getSimpleName() + "[" + getSession() + "]";
     }
 
-    @SuppressWarnings("synthetic-access")
-    class MyStaticIoHandler implements IoHandler {
-        private final AtomicLong messagesCounter = new AtomicLong(0L);
-        private final boolean debugEnabled = log.isDebugEnabled();
-        private final boolean traceEnabled = log.isTraceEnabled();
 
-        MyStaticIoHandler() {
-            super();
-        }
-
-        @Override
-        public void sessionCreated(IoSession session) throws Exception {
-
-        }
-
-        @Override
-        public void sessionClosed(IoSession session) throws Exception {
-            TcpipClientChannel channel = (TcpipClientChannel) session.removeAttribute(TcpipClientChannel.class);
-            Throwable cause = (Throwable) session.removeAttribute(TcpipForwardingExceptionMarker.class);
-            if (debugEnabled) {
-                log.debug("sessionClosed({}) closing channel={} after {} messages - cause={}",
-                        session, channel, messagesCounter, (cause == null) ? null : cause.getClass().getSimpleName());
-            }
-            if (channel == null) {
-                return;
-            }
-
-            if (cause != null) {
-                // If exception occurred close the channel immediately
-                channel.close(true);
-            } else {
-                /*
-                 *  Make sure channel is pending messages have all been sent in case the client was very fast
-                 *  and sent data + closed the connection before channel open was completed.
-                 */
-                OpenFuture openFuture = channel.getOpenFuture();
-                Throwable err = openFuture.getException();
-                ClientChannelPendingMessagesQueue queue = channel.getPendingMessagesQueue();
-                OpenFuture completedFuture = queue.getCompletedFuture();
-                if (err == null) {
-                    err = completedFuture.getException();
-                }
-                boolean immediately = err != null;
-                if (immediately) {
-                    channel.close(true);
-                } else {
-                    completedFuture.addListener(f -> {
-                        Throwable thrown = f.getException();
-                        channel.close(immediately || (thrown != null));
-                    });
-                }
-            }
-        }
-
-        @Override
-        public void messageReceived(IoSession session, Readable message) throws Exception {
-
-            // check if if connected
-            TcpipClientChannel channel = (TcpipClientChannel) session.getAttribute(TcpipClientChannel.class);
-
-            // Need connect
-            if(channel == null){
-
-                System.err.println("  messageReceived >>  onnections ins NULL ainda... " + message);
-
-                Object host = session.getAttribute(HttpRequestExtractHandler.ATTR_HOST);
-
-                System.err.println(" messageReceived >>> host: " + host);
-
-                InetSocketAddress local = (InetSocketAddress) session.getLocalAddress();
-                int localPort = local.getPort();
-                SshdSocketAddress remote = localToRemote.get(localPort);
-                TcpipClientChannel.Type channelType = (remote == null)
-                        ? TcpipClientChannel.Type.Forwarded
-                        : TcpipClientChannel.Type.Direct;
-
-                channel = new MyTcpipClientChannel(channelType, session, remote);
-                session.setAttribute(TcpipClientChannel.class, channel);
-
-                // Propagate original requested host name - see SSHD-792
-                if (channelType == TcpipClientChannel.Type.Forwarded) {
-                    SocketAddress accepted = session.getAcceptanceAddress();
-                    LocalForwardingEntry localEntry = null;
-                    if (accepted instanceof InetSocketAddress) {
-                        synchronized (localForwards) {
-
-                            for (LocalForwardingEntry address : localForwards) {
-                                if(address.getHostName().equals(host)){
-                                    localEntry = address;
-                                    System.out.println("FOUND >>>>" + localEntry);
-                                }
-
-                            }
-
-                        }
-                    }
-
-                    if (localEntry != null) {
-                        if (debugEnabled) {
-                            log.debug("sessionCreated({})[local={}, remote={}, accepted={}] localEntry={}",
-                                    session, local, remote, accepted, localEntry);
-                        }
-                        channel.updateLocalForwardingEntry(localEntry);
-                    } else {
-                        log.warn("sessionCreated({})[local={}, remote={}] cannot locate original local entry for accepted={}",
-                                session, local, remote, accepted);
-                    }
-                } else {
-                    if (debugEnabled) {
-                        log.debug("sessionCreated({}) local={}, remote={}", session, local, remote);
-                    }
-                }
-
-                service.registerChannel(channel);
-                TcpipClientChannel finalChannel = channel;
-
-                long start = System.currentTimeMillis();
-                channel.open().addListener(future -> {
-                    Throwable t = future.getException();
-                    if (t != null) {
-                        log.warn("Failed ({}) to open channel for session={}: {}",
-                                t.getClass().getSimpleName(), session, t.getMessage());
-                        if (debugEnabled) {
-                            log.debug("sessionCreated(" + session + ") channel=" + finalChannel + " open failure details", t);
-                        }
-                        MyDefaultForwardingFilter.this.service.unregisterChannel(finalChannel);
-                        finalChannel.close(false);
-
-                    }else{ // send after connect
-
-                    }
-                }).await(5000);
-
-                System.out.println(" >>>> time : " +  (System.currentTimeMillis() - start));
-            }
-
-            sendMessage(session, message);
-
-        }
-
-        private void sendMessage(IoSession session, Readable message) throws IOException {
-
-            TcpipClientChannel channel = (TcpipClientChannel) session.getAttribute(TcpipClientChannel.class);
-            long totalMessages = messagesCounter.incrementAndGet();
-            Buffer buffer = new ByteArrayBuffer(message.available() + Long.SIZE, false);
-            buffer.putBuffer(message);
-
-            if (traceEnabled) {
-                log.trace("messageReceived({}) channel={}, count={}, handle len={}",
-                        session, channel, totalMessages, message.available());
-            }
-
-            OpenFuture future = channel.getOpenFuture();
-            Consumer<Throwable> errHandler = future.isOpened() ? null : e -> {
-                try {
-                    exceptionCaught(session, e);
-                } catch (Exception err) {
-                    log.warn("messageReceived({}) failed ({}) to signal {}[{}] on channel={}: {}",
-                            session, err.getClass().getSimpleName(), e.getClass().getSimpleName(),
-                            e.getMessage(), channel, err.getMessage());
-                }
-            };
-            ClientChannelPendingMessagesQueue messagesQueue = channel.getPendingMessagesQueue();
-            int pendCount = messagesQueue.handleIncomingMessage(buffer, errHandler);
-            if (traceEnabled) {
-                log.trace("messageReceived({}) channel={} pend count={} after processing message",
-                        session, channel, pendCount);
-            }
-        }
-
-        @Override
-        public void exceptionCaught(IoSession session, Throwable cause) throws Exception {
-            session.setAttribute(TcpipForwardingExceptionMarker.class, cause);
-            if (debugEnabled) {
-                log.debug("exceptionCaught({}) {}: {}", session, cause.getClass().getSimpleName(), cause.getMessage());
-            }
-            if (traceEnabled) {
-                log.trace("exceptionCaught(" + session + ") caught exception details", cause);
-            }
-            session.close(true);
-        }
-    }
 
     @Override
     public SshdSocketAddress getBoundLocalPortForward(int port) {

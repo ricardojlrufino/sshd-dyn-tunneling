@@ -47,10 +47,17 @@ public class SSHDTest {
 //        sshd.setKeyboardInteractiveAuthenticator(new DefaultKeyboardInteractiveAuthenticator());
         sshd.setPasswordAuthenticator(new StaticPasswordAuthenticator(true));
         sshd.setForwardingFilter(new AcceptAllForwardingFilter());
-        // sshd.setShellFactory();
         sshd.setPublickeyAuthenticator(AcceptAllPublickeyAuthenticator.INSTANCE);
 
         sshd.setShellFactory(new ProcessShellFactory(new String[] { "/bin/sh", "-i", "-l" }));
+//        sshd.setShellFactory(new InteractiveProcessShellFactory());
+//        sshd.setShellFactory(new ShellFactory() {
+//            @Override
+//            public Command create() {
+//                return new MyCommand();
+//            }
+//        });
+
 
         sshd.setPort(4440);
 
@@ -64,10 +71,13 @@ public class SSHDTest {
 //        });
 
 
+        SessionForwardHandler sessionForwardManager = new SessionForwardHandler();
+
         sshd.setForwarderFactory(new ForwardingFilterFactory() {
             @Override
             public ForwardingFilter create(ConnectionService service) {
-                return new MyDefaultForwardingFilter(service);
+                System.err.println("Create ForwardingFilter for: "+ service);
+                return new MyDefaultForwardingFilter(service, sessionForwardManager);
             }
         });
 
